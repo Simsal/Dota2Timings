@@ -10,5 +10,6 @@ data class GameEvent(
     val inGameTime: Int, // Store time in seconds
     val timeBased: Boolean,
     val eventBased: Boolean,
+    var remainingTime: Int? = null
 
 )

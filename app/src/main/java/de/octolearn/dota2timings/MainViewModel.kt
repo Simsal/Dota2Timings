@@ -9,16 +9,23 @@ import androidx.room.Room
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.max
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database: AppDatabase = (application as DotaTimingsApp).database
 
-
     private val eventDao = database.eventDao()
+    private val gameEventDao = database.gameEventDao()
 
     // LiveData to hold your events
     val events = MutableLiveData<List<EventType>>(listOf())
     var gameState = MutableLiveData(GameState.NOT_STARTED)
+
+    // A data class to hold timer job and elapsed time information
+    data class TimerInfo(val job: Job, val startTime: Long)
+
+    // Map to store timer info for each event
+    private val eventTimers = mutableMapOf<Int, TimerInfo>()
 
 
     private var gameTimerJob: Job? = null
@@ -27,6 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pauseStartTime: Long = 0L
     var gameTime = MutableLiveData("-01:30")
     var pauseTime = MutableLiveData("00:00")
+    var gameTimeInSeconds = 0;
 
     enum class GameState {
         NOT_STARTED, RUNNING, PAUSED, ENDED
@@ -41,6 +49,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 gameTime.value = formatTime(timeInSeconds)
                 delay(1000) // Delay for 1 second
                 timeInSeconds++
+                gameTimeInSeconds++
             }
         }
 
@@ -65,13 +74,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         gameTimerJob?.cancel() // Stop the game timer
         val currentGameTimeInSeconds =  parseTimeToSeconds(gameTime.value ?: "-01:30")
 
-            viewModelScope.launch {
-                val pauseEvent = Event(name = "Game Paused", timestamp = currentGameTimeInSeconds.toLong())
-                eventDao.insertEvent(pauseEvent)
-            }
+        viewModelScope.launch {
+            val pauseEvent = Event(name = "Game Paused", timestamp = currentGameTimeInSeconds.toLong())
+            eventDao.insertEvent(pauseEvent)
+        }
 
         startPauseTimer() // Start the pause timer
+
+        eventTimers.forEach { (eventId, timerInfo) ->
+            timerInfo.job.cancel()
+
+            val elapsedTime = System.currentTimeMillis() - timerInfo.startTime
+            val remainingTime = max(0, event.inGameTime * 1000L - elapsedTime).toInt() / 1000 // Convert to seconds
+
+            viewModelScope.launch {
+                gameEventDao.updateRemainingTime(eventId, remainingTime)
+            }
+        }
         gameState.value = GameState.PAUSED
+
     }
 
     fun startPauseTimer() {
@@ -95,21 +116,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resumeGame() {
         viewModelScope.launch {
-            // Assuming getLastPauseEvent() returns the most recent pause event
-            val lastPauseEvent = eventDao.getLastPauseEvent() ?: return@launch
-            val pauseDuration = System.currentTimeMillis() - lastPauseEvent.timestamp
-
-            // Update all events by adding pauseDuration to their timestamps
-            val events = eventDao.getAllEvents()
-            events.forEach { event ->
-                eventDao.updateEvent(event.copy(timestamp = event.timestamp + pauseDuration))
+            val eventsToResume = gameEventDao.getAllEvents() // Or use a specific query to fetch paused events
+            eventsToResume.forEach { event ->
+                event.remainingTime?.let { remainingTime ->
+                    if (remainingTime > 0) {
+                        scheduleEventTimer(event, remainingTime)
+                    }
+                }
             }
-
-            // Resume the game timer from the paused point
-            resumeGameTimer(pauseDuration.toInt())
-
-            gameState.value = GameState.RUNNING
         }
+        gameState.value = GameState.RUNNING
+
+        // Resume the game timer from the paused point
+        resumeGameTimer(pauseDuration.toInt())
+
+
     }
 
     private fun resumeGameTimer(pausedTimeInSeconds: Int) {
@@ -159,5 +180,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (negative) totalSeconds *= -1
 
         return totalSeconds
+    }
+
+    fun scheduleEventTimer(event: GameEvent) {
+        val startTime = System.currentTimeMillis()
+        val job = viewModelScope.launch {
+            // Calculate delay based on event.inGameTime
+            delay(event.inGameTime * 1000L)
+            // Handle the event occurrence
+        }
+        eventTimers[event.id] = TimerInfo(job, startTime)
     }
 }
