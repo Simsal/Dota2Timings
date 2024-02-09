@@ -66,6 +66,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 @Composable
 fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
+    val occuredGameEvents by viewModel.occuredGameEvents.observeAsState(emptyList())
 
     Box(modifier = Modifier.padding(paddingValues)) {
         Column {
@@ -89,8 +90,8 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
                 )
             }
             LazyColumn {
-                items(viewModel.events.value ?: listOf()) { event ->
-                    EventItem(event)
+                items(occuredGameEvents) { eventMessage ->
+                    Text(text = eventMessage)
                 }
             }
         }

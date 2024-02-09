@@ -1,6 +1,11 @@
 package de.octolearn.dota2timings
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.MutableLiveData
@@ -20,6 +25,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // LiveData to hold your events
     val events = MutableLiveData<List<EventType>>(listOf())
     var gameState = MutableLiveData(GameState.NOT_STARTED)
+    val occuredGameEvents = MutableLiveData<List<String>>()
+
 
     // A data class to hold timer job and elapsed time information
     data class TimerInfo(val job: Job, val startTime: Long)
@@ -190,5 +197,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Handle the event occurrence
         }
         eventTimers[event.id] = TimerInfo(job, startTime)
+    }
+
+    private fun onEventTriggered(eventType: EventType) {
+        val eventMessage = when (eventType) {
+            EventType.BOUNTY_RUNE -> "A bounty rune has just spawned."
+            EventType.POWER_RUNE -> "A power rune is available."
+            EventType.WISDOM_RUNE -> TODO()
+            EventType.ROSHAN_RESPAWN_MIN -> TODO()
+            EventType.ROSHAN_RESPAWN_MAX -> TODO()
+            EventType.TORMENTOR -> TODO()
+        }
+        sendNotification(eventType, eventMessage)
+    }
+
+    private fun sendNotification(eventType: EventType, eventMessage: String) {
+        val notificationManager = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notificationChannelId = "${eventType.name.toLowerCase()}_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "${eventType.name} Notification"
+            val descriptionText = "Notifies when ${eventType.name.replace('_', ' ').toLowerCase()} occurs"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(notificationChannelId, name, importance).apply {
+                description = descriptionText
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val builder = NotificationCompat.Builder(getApplication(), notificationChannelId)
+            .setSmallIcon(R.drawable.ic_notification) // Make sure you have a generic icon for notifications
+            .setContentTitle("${eventType.name.replace('_', ' ')} Spawned")
+            .setContentText(eventMessage)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+
+        notificationManager.notify(eventType.ordinal, builder.build()) // Use eventType.ordinal as unique ID for each type of event
     }
 }
