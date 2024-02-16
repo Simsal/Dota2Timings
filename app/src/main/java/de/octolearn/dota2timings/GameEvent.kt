@@ -7,9 +7,9 @@ import androidx.room.PrimaryKey
 data class GameEvent(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: EventType,
-    val inGameTime: Int, // Store time in seconds
+    val inGameTime: Long, // Store time in seconds
     val timeBased: Boolean,
     val eventBased: Boolean,
-    var remainingTime: Int? = null
+    var remainingTime: Long? = null
 
 )

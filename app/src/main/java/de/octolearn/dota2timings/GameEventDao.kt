@@ -23,6 +23,6 @@ interface GameEventDao {
     suspend fun updateEvent(gameEvent: GameEvent): Int // Return type can be Int indicating the number of rows updated
 
     @Query("UPDATE game_events SET remainingTime = :remainingTime WHERE id = :eventId")
-    suspend fun updateRemainingTime(eventId: Int, remainingTime: Int)
+    suspend fun updateRemainingTime(eventId: Int, remainingTime: Long)
 }
 

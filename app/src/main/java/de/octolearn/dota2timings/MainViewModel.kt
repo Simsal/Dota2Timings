@@ -29,7 +29,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 
     // A data class to hold timer job and elapsed time information
-    data class TimerInfo(val job: Job, val startTime: Long)
+    data class TimerInfo(val job: Job, val startTime: Long, val inGameTime: Int)
 
     // Map to store timer info for each event
     private val eventTimers = mutableMapOf<Int, TimerInfo>()
@@ -91,8 +91,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         eventTimers.forEach { (eventId, timerInfo) ->
             timerInfo.job.cancel()
 
-            val elapsedTime = System.currentTimeMillis() - timerInfo.startTime
-            val remainingTime = max(0, event.inGameTime * 1000L - elapsedTime).toInt() / 1000 // Convert to seconds
+            val elapsedTimeMs = System.currentTimeMillis() - timerInfo.startTime
+            val elapsedTimeSec = elapsedTimeMs / 1000
+            val remainingTime = max(0, timerInfo.inGameTime - elapsedTimeSec) // already in seconds
 
             viewModelScope.launch {
                 gameEventDao.updateRemainingTime(eventId, remainingTime)
@@ -196,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             delay(event.inGameTime * 1000L)
             // Handle the event occurrence
         }
-        eventTimers[event.id] = TimerInfo(job, startTime)
+        eventTimers[event.id] = TimerInfo(job, startTime, event.inGameTime * 1000)
     }
 
     private fun onEventTriggered(eventType: EventType) {
