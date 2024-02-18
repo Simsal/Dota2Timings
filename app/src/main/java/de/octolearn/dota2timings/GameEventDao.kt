@@ -16,7 +16,7 @@ interface GameEventDao {
     @Query("SELECT * FROM game_events")
     suspend fun getAllEvents(): List<GameEvent>
 
-    @Query("SELECT * FROM events WHERE name = 'Game Paused' ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM game_events WHERE name = 'Game Paused' ORDER BY inGameTime DESC LIMIT 1")
     suspend fun getLastPauseEvent(): GameEvent?
 
     @Update

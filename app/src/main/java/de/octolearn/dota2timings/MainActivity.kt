@@ -75,7 +75,7 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
                     viewModel.pauseGame() // Implement pauseGame in your ViewModel
                     viewModel.startPauseTimer()
                 } else if (gameState == MainViewModel.GameState.PAUSED) {
-                    viewModel.resumeGame() // Implement resumeGame in your ViewModel
+                    //viewModel.resumeGame() // Implement resumeGame in your ViewModel
                     viewModel.stopPauseTimer()
                 } else {
                     viewModel.startGame()
