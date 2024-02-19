@@ -58,17 +58,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (gameState.value == GameState.NOT_STARTED) {
             // Start the game timer logic
             gameTimerJob = viewModelScope.launch {
-                while (true) {
+                while (isActive) { // isActive ensures the coroutine loop can be cancelled
                     gameTime.value = formatTime(gameTimeInSeconds)
+
+                    // Trigger events based on gameTimeInSeconds
+                    triggerTimedEvents(gameTimeInSeconds)
+
                     delay(1000) // Delay for 1 second
                     gameTimeInSeconds++
                 }
             }
             gameState.value = GameState.RUNNING
             Log.i("MainViewModel", "Game started")
-            
-            // Start ingame dota event timers, differ between EventType
-            scheduleEventTimers()
             
             // Insert game start event into the database
             viewModelScope.launch {
@@ -78,18 +79,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else if (gameState.value == GameState.RUNNING) {
             // Pause the game
             gameState.value = GameState.PAUSED
+            pauseGame()
+
+            adjustGameTime();
         } else if (gameState.value == GameState.PAUSED) {
             // Resume the game
             gameState.value = GameState.RUNNING
         }
     }
 
-    private fun scheduleEventTimers() {
-        scheduleBountyRune()
-        schedulePowerRune()
-        scheduleWisdomRune()
-        scheduleFirstTormentorSpawn()
-        scheduleLotusSpawn()
+    private fun triggerTimedEvents(gameTimeInSeconds: Int) {
+        // Example for Bounty Rune: spawns every 3 minutes (180 seconds), starting at 0 seconds
+        if (gameTimeInSeconds % 180 == 0) {
+            onEventTriggered(EventType.BOUNTY_RUNE)
+        }
+        // Power Rune: spawns every 2 minutes (120 seconds), starting at 6 minutes (360 seconds)
+        if (gameTimeInSeconds >= 240 && (gameTimeInSeconds - 360) % 120 == 0) {
+            onEventTriggered(EventType.POWER_RUNE)
+        }
+
+        // Wisdom Rune: spawns every 7 minutes (420 seconds), starting at 7 minutes (420 seconds)
+        if (gameTimeInSeconds >= 420 && (gameTimeInSeconds - 420) % 420 == 0) {
+            onEventTriggered(EventType.WISDOM_RUNE)
+        }
+
+        // Lotus: spawns every 3 minutes (180 seconds), starting at 3 minutes (180 seconds)
+        if (gameTimeInSeconds >= 180 && (gameTimeInSeconds - 180) % 180 == 0) {
+            onEventTriggered(EventType.LOTUS)
+        }
+
+        // Tormentor: spawns at 20 minutes (1200 seconds)
+        if (gameTimeInSeconds == 1200) {
+            onEventTriggered(EventType.TORMENTOR)
+        }
+
+        // Water Rune: spawns at 2 minutes (120 seconds) and 4 minutes (240 seconds)
+        if (gameTimeInSeconds == 120 || gameTimeInSeconds == 240) {
+            onEventTriggered(EventType.WATER_RUNE)
+        }
+
+    }
+
+    private fun adjustGameTime() {
+        val currentTime = System.currentTimeMillis()
+
+        // get current Game Started event
+        val gameStartedTime = viewModelScope.launch {
+            eventDao.getLastStartEvent()
+        }
+
+        // get passed seconds since game started
     }
 
     // Schedule the first Bounty Rune spawn at 0 minutes and then every 3 minutes

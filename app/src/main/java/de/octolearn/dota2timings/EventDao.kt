@@ -16,6 +16,9 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE name = 'Game Paused' ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastPauseEvent(): Event?
 
+    @Query("SELECT * FROM events WHERE name = 'Game Started' ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLastStartEvent(): Event?
+
     @Update
     suspend fun updateEvent(event: Event): Int // Return type can be Int indicating the number of rows updated
 }
