@@ -66,10 +66,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             gameState.value = GameState.RUNNING
             Log.i("MainViewModel", "Game started")
-            
+
             // Start ingame dota event timers, differ between EventType
             scheduleEventTimers()
-            
+
             // Insert game start event into the database
             viewModelScope.launch {
                 val startEvent = Event(name = "Game Started", timestamp = System.currentTimeMillis())
@@ -95,7 +95,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Schedule the first Bounty Rune spawn at 0 minutes and then every 3 minutes
     private fun scheduleBountyRune() {
         Log.i("MainViewModel", "Scheduling Bounty Rune")
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             // Calculate the time until the first spawn
             val initialDelay = if (gameTimeInSeconds < 0) -gameTimeInSeconds else 180 - (gameTimeInSeconds % 180)
 
@@ -336,13 +336,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val eventMessage = when (eventType) {
             EventType.BOUNTY_RUNE -> "A bounty rune has just spawned."
             EventType.POWER_RUNE -> "A power rune is available."
-            EventType.WISDOM_RUNE -> TODO()
-            EventType.ROSHAN_RESPAWN_MIN -> TODO()
-            EventType.ROSHAN_RESPAWN_MAX -> TODO()
-            EventType.TORMENTOR -> TODO()
-            EventType.LOTUS -> TODO()
+            EventType.WISDOM_RUNE -> "A wisdom rune is available."
+            EventType.ROSHAN_RESPAWN_MIN -> "Roshan may respawn soon."
+            EventType.ROSHAN_RESPAWN_MAX -> "Roshan must be respawn."
+            EventType.TORMENTOR -> "Tormentors have spawned."
+            EventType.LOTUS -> "A lotus has spawned."
         }
+        addGameEvent(eventMessage)
         sendNotification(eventType, eventMessage)
+    }
+
+    private fun addGameEvent(eventString: String) {
+        val currentList = occuredGameEvents.value ?: emptyList()
+        val updatedList = currentList + eventString
+        occuredGameEvents.value = updatedList
     }
 
     private fun sendNotification(eventType: EventType, eventMessage: String) {
