@@ -8,14 +8,13 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.max
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -23,6 +22,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val eventDao = database.eventDao()
     private val gameEventDao = database.gameEventDao()
+    private val gameDao = database.gameDao()
+
+    // current game id
+    var currentGameId: Int = 0
 
     // LiveData to hold your events
     val events = MutableLiveData<List<EventType>>(listOf())
@@ -43,7 +46,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pauseStartTime: Long = 0L
     var gameTime = MutableLiveData("-01:30")
     var pauseTime = MutableLiveData("00:00")
-    var gameTimeInSeconds = -90;    // Starting time (-01:30) in seconds
+    var gameTimeInSeconds = -90   // Starting time (-01:30) in seconds
     var pausedAtSecond: Int? = null
 
     enum class GameState {
@@ -56,6 +59,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 
         if (gameState.value == GameState.NOT_STARTED) {
+            // Insert game in the database
+            viewModelScope.launch {
+                val game = Game(startTime = System.currentTimeMillis())
+                currentGameId = gameDao.insertGame(game).toInt()
+
+                // Insert game start event into the database
+                viewModelScope.launch {
+                    val startEvent = Event(name = "Game Started", timestamp = System.currentTimeMillis(), gameId = currentGameId)
+                    eventDao.insertEvent(startEvent)
+                }
+            }
+
             // Start the game timer logic
             gameTimerJob = viewModelScope.launch {
                 while (isActive) { // isActive ensures the coroutine loop can be cancelled
@@ -64,27 +79,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Trigger events based on gameTimeInSeconds
                     triggerTimedEvents(gameTimeInSeconds)
 
-                    delay(1000) // Delay for 1 second
+                    //delay(1000) // Delay for 1 second
+
+                    // shorter delay for debugging
+                    delay(100)
+
                     gameTimeInSeconds++
                 }
             }
             gameState.value = GameState.RUNNING
             Log.i("MainViewModel", "Game started")
             
-            // Insert game start event into the database
-            viewModelScope.launch {
-                val startEvent = Event(name = "Game Started", timestamp = System.currentTimeMillis())
-                eventDao.insertEvent(startEvent)
-            }
+
         } else if (gameState.value == GameState.RUNNING) {
             // Pause the game
             gameState.value = GameState.PAUSED
             pauseGame()
 
-            adjustGameTime();
+            Log.i("MainViewModel", "Game paused")
+
+            adjustGameTime()
         } else if (gameState.value == GameState.PAUSED) {
             // Resume the game
             gameState.value = GameState.RUNNING
+            //resumeGameTimer()
         }
     }
 
@@ -121,147 +139,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun adjustGameTime() {
-        val currentTime = System.currentTimeMillis()
-
-        // get current Game Started event
-        val gameStartedTime = viewModelScope.launch {
-            eventDao.getLastStartEvent()
-        }
-
-        // get passed seconds since game started
-    }
-
-    // Schedule the first Bounty Rune spawn at 0 minutes and then every 3 minutes
-    private fun scheduleBountyRune() {
-        Log.i("MainViewModel", "Scheduling Bounty Rune")
+        Log.i("MainViewModel", "Adjusting game time")
         viewModelScope.launch {
-            // Calculate the time until the first spawn
-            val initialDelay = if (gameTimeInSeconds < 0) -gameTimeInSeconds else 180 - (gameTimeInSeconds % 180)
+            // Assuming getLastStartEvent() returns an Event object or null if not found
+            val gameStartedEvent = eventDao.getLastStartEvent()
 
-            // Initial delay to align with the game time 0 or next 3-minute mark
-            delay(initialDelay * 1000L) // Convert seconds to milliseconds
+            gameStartedEvent?.let { event ->
+                // Assuming the timestamp is stored in milliseconds
+                val gameStartedTime = event.timestamp
+                val currentTime = System.currentTimeMillis()
+                val timePassedSinceGameStarted = (currentTime - gameStartedTime) / 1000
 
-            // Spawn the first rune and then repeat every 3 minutes
-            while (isActive) { // isActive is a property of the coroutine scope
-                onEventTriggered(EventType.BOUNTY_RUNE)
+                // Calculate how many seconds have to be incremented to reach the current time
+                val incrementsNeeded = timePassedSinceGameStarted - gameTimeInSeconds
 
-                // Wait for the next spawn
-                delay(180 * 1000L) // 180 seconds or 3 minutes
+                // log the increments needed
+                Log.i("MainViewModel", "Increments needed: $incrementsNeeded")
+
+                // Increment gameTimeInSeconds gradually to ensure all events are triggered
+                repeat(incrementsNeeded.toInt()) {
+                    gameTimeInSeconds++
+                    gameTime.postValue(formatTime(gameTimeInSeconds))
+
+                    // Trigger any timed events that should occur at this second
+                    triggerTimedEvents(gameTimeInSeconds)
+                    delay(1) // Minimal delay to prevent freezing, adjust as needed
+                }
             }
         }
     }
-
-    // Schedule the first Power Rune spawn at 6 minutes and then every 2 minutes
-    private fun schedulePowerRune() {
-        viewModelScope.launch {
-            // Calculate the time until the first Power Rune spawn
-            // If gameTimeInSeconds is less than 360, calculate the delay until it reaches 360.
-            // Otherwise, calculate the delay until the next 2-minute mark from the current game time.
-            val firstSpawnTime = 360 // 6 minutes in seconds
-            val spawnInterval = 120 // 2 minutes in seconds
-
-            val initialDelay = if (gameTimeInSeconds < firstSpawnTime) {
-                firstSpawnTime - gameTimeInSeconds
-            } else {
-                spawnInterval - ((gameTimeInSeconds - firstSpawnTime) % spawnInterval)
-            }
-
-            // Initial delay to align with the first Power Rune spawn time or the next 2-minute mark
-            delay(initialDelay * 1000L) // Convert seconds to milliseconds
-
-            // Spawn the first rune and then repeat every 2 minutes
-            while (isActive) { // isActive is a property of the coroutine scope
-                onEventTriggered(EventType.POWER_RUNE)
-
-                // Wait for the next spawn
-                delay(spawnInterval * 1000L) // 120 seconds or 2 minutes
-
-            }
-        }
-    }
-
-    // Schedule the first Wisdom Rune spawn at 7 minutes and then every 7 minutes
-    private fun scheduleWisdomRune() {
-        viewModelScope.launch {
-            // Calculate the time until the first Power Rune spawn
-            // If gameTimeInSeconds is less than 360, calculate the delay until it reaches 360.
-            // Otherwise, calculate the delay until the next 2-minute mark from the current game time.
-            val firstSpawnTime = 420 // 7 minutes in seconds
-            val spawnInterval = 420 // 7 minutes in seconds
-
-            val initialDelay = if (gameTimeInSeconds < firstSpawnTime) {
-                firstSpawnTime - gameTimeInSeconds
-            } else {
-                spawnInterval - ((gameTimeInSeconds - firstSpawnTime) % spawnInterval)
-            }
-
-            // Initial delay to align with the first Wisdom Rune spawn time or the next 7-minute mark
-            delay(initialDelay * 1000L) // Convert seconds to milliseconds
-
-            // Spawn the first rune and then repeat every 7 minutes
-            while (isActive) { // isActive is a property of the coroutine scope
-                onEventTriggered(EventType.WISDOM_RUNE)
-
-                // Wait for the next spawn
-                delay(spawnInterval * 1000L) // 7 minutes
-            }
-        }
-    }
-    // Schedule the first Lotus spawn at 3 minutes and then every 3 minutes
-    private fun scheduleLotusSpawn() {
-        viewModelScope.launch {
-            // Calculate the time until the first Lotus spawn
-            val firstSpawnTime = 180 // 3 minutes in seconds
-            val spawnInterval = 180 // 3 minutes in seconds
-
-            val initialDelay = if (gameTimeInSeconds < firstSpawnTime) {
-                firstSpawnTime - gameTimeInSeconds
-            } else {
-                spawnInterval - ((gameTimeInSeconds - firstSpawnTime) % spawnInterval)
-            }
-
-            // Initial delay to align with the first Lotus spawn time or the next 3-minute mark
-            delay(initialDelay * 1000L) // Convert seconds to milliseconds
-
-            // Spawn the first Lotus and then repeat every 3 minutes
-            while (isActive) { // isActive is a property of the coroutine scope
-                onEventTriggered(EventType.LOTUS)
-
-                // Wait for the next spawn
-                delay(spawnInterval * 1000L) // 180 seconds or 3 minutes
-            }
-        }
-    }
-
-    // Schedule the first Tormentor spawn at 20 minutes
-    private fun scheduleFirstTormentorSpawn() {
-        viewModelScope.launch {
-            // The spawn time for the first Tormentor
-            val spawnTime = 20 * 60 // 20 minutes converted to seconds
-
-            // Calculate the delay until the Tormentor spawn
-            // If gameTimeInSeconds is less than spawnTime, calculate the delay until it reaches spawnTime.
-            val initialDelay = if (gameTimeInSeconds < spawnTime) {
-                spawnTime - gameTimeInSeconds
-            } else {
-                0 // If for some reason the game time is already past 20 minutes, spawn immediately
-            }
-
-            // Wait until the spawn time
-            delay(initialDelay * 1000L) // Convert seconds to milliseconds
-
-            onEventTriggered(EventType.TORMENTOR)
-
-        }
-    }
-
 
     fun pauseGame() {
         gameTimerJob?.cancel() // Stop the game timer
         pausedAtSecond = gameTimeInSeconds // Store the game time at pause
 
         viewModelScope.launch {
-            val pauseEvent = Event(name = "Game Paused", timestamp = pausedAtSecond!! * 1000L)
+            val pauseEvent = Event(name = "Game Paused", timestamp = System.currentTimeMillis(), gameId = currentGameId)
             eventDao.insertEvent(pauseEvent)
         }
 
@@ -338,15 +251,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return String.format("%02d:%02d", minutes, seconds)
     }
 
-
-
-    fun addEvent(name: String) {
-        viewModelScope.launch {
-            val event = Event(name = name, timestamp = System.currentTimeMillis())
-            eventDao.insertEvent(event)
-        }
-    }
-
     // Additional functions as needed
     private fun formatTime(seconds: Int): String {
         val absSeconds = kotlin.math.abs(seconds)
@@ -375,23 +279,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val eventMessage = when (eventType) {
             EventType.BOUNTY_RUNE -> "A bounty rune has just spawned."
             EventType.POWER_RUNE -> "A power rune is available."
-            EventType.WISDOM_RUNE -> TODO()
-            EventType.ROSHAN_RESPAWN_MIN -> TODO()
-            EventType.ROSHAN_RESPAWN_MAX -> TODO()
-            EventType.TORMENTOR -> TODO()
-            EventType.LOTUS -> TODO()
+            EventType.WISDOM_RUNE -> "A wisdom rune is available."
+            EventType.ROSHAN_RESPAWN_MIN -> "Roshan may respawn soon."
+            EventType.ROSHAN_RESPAWN_MAX -> "Roshan must be alive now."
+            EventType.TORMENTOR -> "A tormentor has just spawned."
+            EventType.LOTUS -> "A lotus has just spawned."
+            EventType.WATER_RUNE -> "A water rune is available."
         }
         sendNotification(eventType, eventMessage)
+        addGameEvent(eventMessage)
+    }
+
+    private fun addGameEvent(eventString: String) {
+        val currentList = occuredGameEvents.value ?: emptyList()
+        val updatedList = currentList + eventString
+        occuredGameEvents.value = updatedList
     }
 
     private fun sendNotification(eventType: EventType, eventMessage: String) {
         Log.i("MainViewModel", "Sending notification for $eventType with message: $eventMessage")
         val notificationManager = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val notificationChannelId = "${eventType.name.toLowerCase()}_channel"
+        val notificationChannelId = "${eventType.name.lowercase(Locale.getDefault())}_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "${eventType.name} Notification"
-            val descriptionText = "Notifies when ${eventType.name.replace('_', ' ').toLowerCase()} occurs"
+            val descriptionText = "Notifies when ${eventType.name.replace('_', ' ').lowercase(Locale.getDefault())} occurs"
             val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(notificationChannelId, name, importance).apply {
                 description = descriptionText
