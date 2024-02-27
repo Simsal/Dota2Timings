@@ -3,38 +3,27 @@ package de.octolearn.dota2timings
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import de.octolearn.dota2timings.ui.theme.Dota2TimingsTheme
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CardElevation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Button
 import androidx.compose.runtime.livedata.observeAsState
@@ -66,37 +55,56 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 @Composable
 fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
-    val occuredGameEvents by viewModel.occuredGameEvents.observeAsState(emptyList())
+    // Assuming occurredGameEvents now includes time information. If it's just messages, you'll need to adjust your data structure.
+    val occurredGameEvents by viewModel.occurredGameEvents.observeAsState(emptyList())
 
     Box(modifier = Modifier.padding(paddingValues)) {
         Column {
-            Button(onClick = {
-                if (gameState == MainViewModel.GameState.RUNNING) {
-                    viewModel.pauseGame() // Implement pauseGame in your ViewModel
-                    viewModel.startPauseTimer()
-                } else if (gameState == MainViewModel.GameState.PAUSED) {
-                    //viewModel.resumeGame() // Implement resumeGame in your ViewModel
-                    viewModel.stopPauseTimer()
-                } else {
+            Button(
+                onClick = {
                     viewModel.startGame()
-                }
-            }) {
+
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
-                    when (gameState) {
-                        MainViewModel.GameState.RUNNING -> "Pause Game"
-                        MainViewModel.GameState.PAUSED -> "Resume Game"
-                        else -> "Start Game"
-                    }
+                    text = when (gameState) {
+                        MainViewModel.GameState.RUNNING -> "⏸ Pause Game"
+                        MainViewModel.GameState.PAUSED -> "▶ Resume Game"
+                        else -> "▶ Start Game"
+                    },
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
             LazyColumn {
-                items(occuredGameEvents) { eventMessage ->
-                    Text(text = eventMessage)
+                // Reverse the list to show the newest event at the top
+                items(occurredGameEvents.reversed()) { eventMessage ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = eventMessage.message, // Assuming eventMessage includes the event description
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // Assuming you have a way to format or retrieve the event time
+                        // This requires storing or associating each event with its timestamp
+                        Text(
+                            text = eventMessage.timestamp, // Replace with actual event time
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        )
+                    }
                 }
             }
         }
     }
 }
+
 
 
 

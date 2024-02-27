@@ -30,11 +30,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // LiveData to hold your events
     val events = MutableLiveData<List<EventType>>(listOf())
     var gameState = MutableLiveData(GameState.NOT_STARTED)
-    val occuredGameEvents = MutableLiveData<List<String>>()
+    val occurredGameEvents = MutableLiveData<List<FrontendGameEvent>>()
 
 
     // A data class to hold timer job and elapsed time information
     data class TimerInfo(val job: Job, val startTime: Long, val inGameTime: Int)
+
+    // A data class to store text + timestamp
+    data class FrontendGameEvent(val message: String, val timestamp: String)
 
     // Map to store timer info for each event
     private val eventTimers = mutableMapOf<Int, TimerInfo>()
@@ -72,21 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Start the game timer logic
-            gameTimerJob = viewModelScope.launch {
-                while (isActive) { // isActive ensures the coroutine loop can be cancelled
-                    gameTime.value = formatTime(gameTimeInSeconds)
-
-                    // Trigger events based on gameTimeInSeconds
-                    triggerTimedEvents(gameTimeInSeconds)
-
-                    //delay(1000) // Delay for 1 second
-
-                    // shorter delay for debugging
-                    delay(100)
-
-                    gameTimeInSeconds++
-                }
-            }
+            startGameTimer()
             gameState.value = GameState.RUNNING
             Log.i("MainViewModel", "Game started")
             
@@ -102,41 +91,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else if (gameState.value == GameState.PAUSED) {
             // Resume the game
             gameState.value = GameState.RUNNING
-            //resumeGameTimer()
+            resumeGameTimer()
+            Log.i("MainViewModel", "Game resumed")
+
         }
     }
 
     private fun triggerTimedEvents(gameTimeInSeconds: Int) {
         // Example for Bounty Rune: spawns every 3 minutes (180 seconds), starting at 0 seconds
         if (gameTimeInSeconds % 180 == 0) {
-            onEventTriggered(EventType.BOUNTY_RUNE)
+            onEventTriggered(EventType.BOUNTY_RUNE, gameTimeInSeconds)
         }
         // Power Rune: spawns every 2 minutes (120 seconds), starting at 6 minutes (360 seconds)
         if (gameTimeInSeconds >= 240 && (gameTimeInSeconds - 360) % 120 == 0) {
-            onEventTriggered(EventType.POWER_RUNE)
+            onEventTriggered(EventType.POWER_RUNE, gameTimeInSeconds)
         }
 
         // Wisdom Rune: spawns every 7 minutes (420 seconds), starting at 7 minutes (420 seconds)
         if (gameTimeInSeconds >= 420 && (gameTimeInSeconds - 420) % 420 == 0) {
-            onEventTriggered(EventType.WISDOM_RUNE)
+            onEventTriggered(EventType.WISDOM_RUNE, gameTimeInSeconds)
         }
 
         // Lotus: spawns every 3 minutes (180 seconds), starting at 3 minutes (180 seconds)
         if (gameTimeInSeconds >= 180 && (gameTimeInSeconds - 180) % 180 == 0) {
-            onEventTriggered(EventType.LOTUS)
+            onEventTriggered(EventType.LOTUS, gameTimeInSeconds)
         }
 
         // Tormentor: spawns at 20 minutes (1200 seconds)
         if (gameTimeInSeconds == 1200) {
-            onEventTriggered(EventType.TORMENTOR)
+            onEventTriggered(EventType.TORMENTOR, gameTimeInSeconds)
         }
 
         // Water Rune: spawns at 2 minutes (120 seconds) and 4 minutes (240 seconds)
         if (gameTimeInSeconds == 120 || gameTimeInSeconds == 240) {
-            onEventTriggered(EventType.WATER_RUNE)
+            onEventTriggered(EventType.WATER_RUNE, gameTimeInSeconds)
         }
 
     }
+
+    private fun startGameTimer() {
+        gameTimerJob = viewModelScope.launch {
+            while (true) {
+                gameTime.value = formatTime(gameTimeInSeconds)
+                // Trigger events based on gameTimeInSeconds
+                triggerTimedEvents(gameTimeInSeconds)
+                //delay(1000) // Delay for 1 second
+                delay(100)
+                gameTimeInSeconds++
+            }
+        }
+    }
+
 
     private fun adjustGameTime() {
         Log.i("MainViewModel", "Adjusting game time")
@@ -214,34 +219,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Optionally save the pause duration to a database
     }
 
-    /*fun resumeGame() {
-        viewModelScope.launch {
-            val eventsToResume = gameEventDao.getAllEvents() // Or use a specific query to fetch paused events
-            eventsToResume.forEach { event ->
-                event.remainingTime?.let { remainingTime ->
-                    if (remainingTime > 0) {
-                        scheduleEventTimer(event, remainingTime)
-                    }
-                }
-            }
-        }
-        gameState.value = GameState.RUNNING
-
-        // Resume the game timer from the paused point
-        resumeGameTimer(pauseDuration.toInt())
-
-
-    }*/
-
-    private fun resumeGameTimer(pausedTimeInSeconds: Int) {
-        gameTimerJob = viewModelScope.launch {
-            var timeInSeconds = pausedTimeInSeconds
-            while (true) {
-                gameTime.value = formatTime(timeInSeconds)
-                delay(1000) // Delay for 1 second
-                timeInSeconds++
-            }
-        }
+    private fun resumeGameTimer() {
+        startGameTimer()
     }
 
     private fun formatPauseTime(millis: Long): String {
@@ -274,7 +253,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    private fun onEventTriggered(eventType: EventType) {
+    private fun onEventTriggered(eventType: EventType, gameTimeInSeconds: Int) {
         Log.i("MainViewModel", "Event triggered: $eventType")
         val eventMessage = when (eventType) {
             EventType.BOUNTY_RUNE -> "A bounty rune has just spawned."
@@ -287,13 +266,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             EventType.WATER_RUNE -> "A water rune is available."
         }
         sendNotification(eventType, eventMessage)
-        addGameEvent(eventMessage)
+        addGameEvent(eventMessage, gameTimeInSeconds)
     }
 
-    private fun addGameEvent(eventString: String) {
-        val currentList = occuredGameEvents.value ?: emptyList()
-        val updatedList = currentList + eventString
-        occuredGameEvents.value = updatedList
+    private fun addGameEvent(eventMessage: String, occurredGameTimeInSeconds: Int) {
+        val currentList = occurredGameEvents.value ?: emptyList()
+        val eventTime = formatTime(occurredGameTimeInSeconds)
+        val updatedList = currentList + FrontendGameEvent(eventMessage, eventTime)
+        occurredGameEvents.value = updatedList
     }
 
     private fun sendNotification(eventType: EventType, eventMessage: String) {
