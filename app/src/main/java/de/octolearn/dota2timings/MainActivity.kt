@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import de.octolearn.dota2timings.ui.theme.md_theme_light_primary
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,8 +83,7 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = {
-                            if (gameState == MainViewModel.GameState.RUNNING) viewModel.pauseGame()
-                            else viewModel.startGame()
+                            viewModel.startGame()
                         },
                         modifier = Modifier.weight(1f),
                         shape = RectangleShape // Apply RectangleShape to remove rounded corners
@@ -222,6 +222,8 @@ fun EventCard(event: MainViewModel.FrontendGameEvent, isProminent: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppTopBar(viewModel: MainViewModel) {
+    val roshanKills by viewModel.roshanKills.observeAsState(0)
+    val isNight by viewModel.isNight.observeAsState(true)
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
     val gameTime by viewModel.gameTime.observeAsState("-01:30")
     val pauseTime by viewModel.pauseTime.observeAsState("00:00")
@@ -232,29 +234,41 @@ fun AppTopBar(viewModel: MainViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
-                when (gameState) {
-                    MainViewModel.GameState.RUNNING -> {
+                // Roshan kills on the left
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.Start) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.roshan_optimized), // Replace with actual Roshan icon resource ID
+                        contentDescription = "Roshan Kills",
+                        modifier = Modifier.size(30.dp),
+                        tint = Color.Unspecified
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "#${roshanKills +1}")
+                }
 
-                        Text(
-                            text = gameTime,
-                            color = Color.Black,
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        )
-                    }
-                    MainViewModel.GameState.PAUSED -> {
+                // Centered game time or pause time
+                Text(
+                    text = when (gameState) {
+                        MainViewModel.GameState.RUNNING -> gameTime
+                        MainViewModel.GameState.PAUSED -> pauseTime
+                        else -> gameTime
+                    },
+                    color = if (gameState == MainViewModel.GameState.PAUSED) MaterialTheme.colorScheme.primary else Color.Black,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                )
 
-                        Text(
-                            text = pauseTime,
-                            color = Color.Yellow,
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        )
-                    }
-                    else -> {
-
-                        Text(
-                            text = gameTime,
-                            color = Color.Black,
-                            modifier = Modifier.align(Alignment.CenterVertically)
+                // Moon or Sun icon on the right
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
+                    if (isNight) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.moon),
+                        contentDescription = if (isNight) "Night" else "Day",
+                        modifier = Modifier.size(30.dp)
+                    )} else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.sun),
+                            contentDescription = if (isNight) "Night" else "Day",
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                 }
@@ -263,6 +277,7 @@ fun AppTopBar(viewModel: MainViewModel) {
         // Adjust the colors, actions, and other properties of TopAppBar as needed
     )
 }
+
 
 
 @Composable

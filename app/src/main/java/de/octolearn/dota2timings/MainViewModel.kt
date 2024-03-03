@@ -40,6 +40,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // LiveData to track how many roshan kills have occurred
     val roshanKills = MutableLiveData(0)
 
+    // LiveData if it is night
+    val isNight = MutableLiveData(true)
+
     // A data class to hold timer job and elapsed time information
     data class TimerInfo(val job: Job, val startTime: Long, val inGameTime: Int)
 
@@ -64,6 +67,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var pauseTimeInSeconds = 0
     var pausedAtSecond: Int? = null
 
+    //dev
+    //private var delay = 100L
+    //prod
+    private var delay = 1000L
+
     enum class GameState {
         NOT_STARTED, RUNNING, PAUSED, ENDED
     }
@@ -77,37 +85,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (gameState.value == GameState.NOT_STARTED) {
             // Insert game in the database
             viewModelScope.launch {
+                // Insert game in the database and await the new game ID
                 val game = Game(startTime = System.currentTimeMillis())
                 currentGameId = gameDao.insertGame(game).toInt()
 
-                // Insert game start event into the database
-                viewModelScope.launch {
-                    val startEvent = Event(name = "Game Started", timestamp = System.currentTimeMillis(), gameId = currentGameId)
-                    eventDao.insertEvent(startEvent)
-                }
-            }
+                // Now that currentGameId is set, insert the game start event into the database
+                val startEvent = Event(name = "Game Started", timestamp = System.currentTimeMillis(), gameId = currentGameId)
+                eventDao.insertEvent(startEvent)
 
-            // Start the game timer logic
-            startGameTimer()
-            onEventTriggered(EventType.GAME_STARTED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
-            gameState.value = GameState.RUNNING
-            Log.i("MainViewModel", "Game started")
+                // With the database operations complete, proceed with starting the game
+                startGameTimer()
+                onEventTriggered(EventType.GAME_STARTED, gameTimeInSeconds, listOf("dire_optimized", "radiant_optimized"))
+                gameState.value = GameState.RUNNING
+                Log.i("MainViewModel", "Game started")
+            }
 
         } else if (gameState.value == GameState.RUNNING) {
             // Pause the game
             gameState.value = GameState.PAUSED
-            pauseGame()
             onEventTriggered(EventType.GAME_PAUSED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
 
             Log.i("MainViewModel", "Game paused")
 
-            adjustGameTime()
+            pauseGame()
+
         } else if (gameState.value == GameState.PAUSED) {
             // Resume the game
             gameState.value = GameState.RUNNING
             resumeGameTimer()
             onEventTriggered(EventType.GAME_RESUMED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
             Log.i("MainViewModel", "Game resumed")
+            stopPauseTimer()
 
         }
     }
@@ -148,7 +156,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun triggerTimedEvents(gameTimeInSeconds: Int) {
-        // Example for Bounty Rune: spawns every 3 minutes (180 seconds), starting at 0 seconds
+        // Day Night Cycle, switches every 5 minutes
+        if (gameTimeInSeconds % 300 == 0) {
+            isNight.value = !isNight.value!!
+            if (isNight.value == true) {
+                onEventTriggered(EventType.NIGHT_CYCLE, gameTimeInSeconds, listOf("night_optimized"))
+            } else {
+                onEventTriggered(EventType.DAY_CYCLE, gameTimeInSeconds, listOf("day_optimized"))
+            }
+        }
+
+        // Bounty Rune: spawns every 3 minutes (180 seconds), starting at 0 seconds
         if (gameTimeInSeconds % 180 == 0) {
             onEventTriggered(EventType.BOUNTY_RUNE, gameTimeInSeconds, List(1) { "bounty" })
         }
@@ -206,7 +224,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             onEventTriggered(EventType.NEUTRAL_ITEM_TIER_5, gameTimeInSeconds, List(1) {"tier_5_optimized"})
         }
 
-
     }
 
     private fun startGameTimer() {
@@ -215,8 +232,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 gameTime.value = formatTime(gameTimeInSeconds)
                 // Trigger events based on gameTimeInSeconds
                 triggerTimedEvents(gameTimeInSeconds)
-                //delay(1000) // Delay for 1 second
-                delay(100)
+                delay(delay) // Delay for 1 second
+
                 gameTimeInSeconds++
             }
         }
@@ -226,33 +243,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun adjustGameTime() {
         Log.i("MainViewModel", "Adjusting game time")
         viewModelScope.launch {
-            // Assuming getLastStartEvent() returns an Event object or null if not found
-            val gameStartedEvent = eventDao.getLastStartEvent()
+            val gameStartedEvent = eventDao.getStartEventById(currentGameId) ?: return@launch
 
-            gameStartedEvent?.let { event ->
-                // Assuming the timestamp is stored in milliseconds
-                val gameStartedTime = event.timestamp
-                val currentTime = System.currentTimeMillis()
-                val timePassedSinceGameStarted = (currentTime - gameStartedTime) / 1000
+            // Fetch all pause started and ended events for the current game
+            val pauseStartEventsSum = eventDao.getPauseStartEventsSumForGame(currentGameId)
+            val pauseEndEventsSum = eventDao.getPauseEndEventsSumForGame(currentGameId)
 
-                // Calculate how many seconds have to be incremented to reach the current time
-                val incrementsNeeded = timePassedSinceGameStarted - gameTimeInSeconds
+            // Calculate total pause duration in seconds
+            val totalPauseDuration = (pauseEndEventsSum - pauseStartEventsSum) / 1000
 
-                // log the increments needed
-                Log.i("MainViewModel", "Increments needed: $incrementsNeeded")
+            val gameStartedTime = gameStartedEvent.timestamp
+            val currentTime = System.currentTimeMillis()
+            // Adjust time passed since game started by subtracting total pause duration
+            val timePassedSinceGameStarted = (currentTime - gameStartedTime) / 1000 - totalPauseDuration + 90
 
-                // Increment gameTimeInSeconds gradually to ensure all events are triggered
-                repeat(incrementsNeeded.toInt()) {
-                    gameTimeInSeconds++
-                    gameTime.postValue(formatTime(gameTimeInSeconds))
+            val incrementsNeeded = timePassedSinceGameStarted - gameTimeInSeconds
 
-                    // Trigger any timed events that should occur at this second
-                    triggerTimedEvents(gameTimeInSeconds)
-                    delay(1) // Minimal delay to prevent freezing, adjust as needed
-                }
+            Log.i("MainViewModel", "Increments needed: $incrementsNeeded")
+
+            repeat(incrementsNeeded.toInt()) {
+                gameTimeInSeconds++
+                gameTime.postValue(formatTime(gameTimeInSeconds))
+                triggerTimedEvents(gameTimeInSeconds)
+                delay(1) // Minimal delay to prevent freezing, adjust as needed
             }
         }
     }
+
 
     fun pauseGame() {
         gameTimerJob?.cancel() // Stop the game timer
@@ -285,8 +302,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pauseTimerJob = viewModelScope.launch {
             while (true) {
                 pauseTime.value = formatTime(pauseTimeInSeconds)
-                //delay(1000) // Delay for 1 second
-                delay(100)
+                delay(delay)
                 pauseTimeInSeconds++
             }
         }
@@ -318,7 +334,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-
+        adjustGameTime()
         startGameTimer()
     }
 
@@ -327,7 +343,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         eventTimers[eventId]?.job?.cancel()
 
         // Assuming remainingTime is in seconds, convert to milliseconds for delay
-        val delayTimeMs = remainingTime * 1000L
+        val delayTimeMs = remainingTime * delay
 
         // Schedule a new timer for the event with the remaining time
         val newJob = viewModelScope.launch {
@@ -342,13 +358,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         eventTimers[eventId] = TimerInfo(newJob, System.currentTimeMillis(), remainingTime)
     }
 
-    private fun formatPauseTime(millis: Long): String {
-        val totalSeconds = millis / 1000
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-
     // Additional functions as needed
     private fun formatTime(seconds: Int): String {
         val absSeconds = kotlin.math.abs(seconds)
@@ -358,17 +367,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             absSeconds % 60
         )
         return if (seconds < 0) "-$formattedTime" else formattedTime
-    }
-
-    fun parseTimeToSeconds(timeStr: String): Int {
-        val negative = timeStr.startsWith("-")
-        val parts = timeStr.dropWhile { !it.isDigit() }.split(":").map { it.toInt() }
-
-        // Assuming parts[0] is minutes and parts[1] is seconds
-        var totalSeconds = parts[0] * 60 + parts[1]
-        if (negative) totalSeconds *= -1
-
-        return totalSeconds
     }
 
     fun onRoshanKilled() {
@@ -383,20 +381,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val maxRespawnTime = gameTimeInSeconds + respawnTime + 180 // 3 minutes in seconds
 
         val minRespawnJob = viewModelScope.launch {
-            // TODO: change to 1000L
-            delay(respawnTime * 100L)
+            delay(respawnTime * delay)
             onEventTriggered(EventType.ROSHAN_RESPAWN_MIN, minRespawnTime, List(1) { "roshan_optimized" })
             isRoshanActionEnabled.value = true
         }
         val maxRespawnJob = viewModelScope.launch {
-            // TODO: change to 1000L
-            delay((respawnTime + 180) * 100L)
+            delay((respawnTime + 180) * delay)
             onEventTriggered(EventType.ROSHAN_RESPAWN_MAX, maxRespawnTime, List(1) { "roshan_optimized" })
+        }
+        val aegisDespawnJob = viewModelScope.launch {
+            delay(300 * delay)
+            onEventTriggered(EventType.AEGIS_DISAPPEARS, gameTimeInSeconds + 300, List(1) { "aegis_optimized" })
         }
 
         eventTimers[EventType.ROSHAN_RESPAWN_MIN.ordinal] = TimerInfo(minRespawnJob, System.currentTimeMillis(), respawnTime)
         eventTimers[EventType.ROSHAN_RESPAWN_MAX.ordinal] = TimerInfo(maxRespawnJob, System.currentTimeMillis(), respawnTime + 180)
-
+        eventTimers[EventType.AEGIS_DISAPPEARS.ordinal] = TimerInfo(aegisDespawnJob, System.currentTimeMillis(), 300)
 
     }
 
@@ -407,7 +407,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onEventTriggered(EventType.DIRE_TORMENTOR_KILLED, gameTimeInSeconds, List(1) {"dire_tormentor_optimized"})
         val direTormentorRespawnTime = 600 // 10 minutes in seconds
         val direTormentorRespawnJob = viewModelScope.launch {
-            delay(direTormentorRespawnTime * 100L)
+            delay(direTormentorRespawnTime * delay)
             onEventTriggered(EventType.DIRE_TORMENTOR_RESPAWN, gameTimeInSeconds + direTormentorRespawnTime, List(1) {"dire_tormentor_optimized"})
             isDireTormentorActionEnabled.value = true
         }
@@ -422,7 +422,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onEventTriggered(EventType.RADIANT_TORMENTOR_KILLED, gameTimeInSeconds, List(1) { "radiant_tormentor_optimized" })
         val radiantTormentorRespawnTime = 600 // 10 minutes in seconds
         val radiantTormentorRespawnJob = viewModelScope.launch {
-            delay(radiantTormentorRespawnTime * 100L)
+            delay(radiantTormentorRespawnTime * delay)
             onEventTriggered(EventType.RADIANT_TORMENTOR_RESPAWN, gameTimeInSeconds + radiantTormentorRespawnTime, List(1) { "radiant_tormentor_optimized" })
             isRadiantTormentorActionEnabled.value = true
         }
@@ -456,7 +456,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             EventType.GAME_ENDED ->  "Game has ended."
             EventType.DIRE_TORMENTOR_RESPAWN -> "Dire tormentor respawn"
             EventType.RADIANT_TORMENTOR_RESPAWN -> "Radiant tormentor respawn"
-
+            EventType.DAY_CYCLE -> "Daytime"
+            EventType.NIGHT_CYCLE -> "Nighttime"
+            EventType.AEGIS_DISAPPEARS -> "Aegis expires"
         }
         sendNotification(eventType, eventMessage)
         addGameEvent(eventMessage, gameTimeInSeconds, icons)
