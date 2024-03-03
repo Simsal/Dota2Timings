@@ -3,6 +3,7 @@ package de.octolearn.dota2timings
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,9 +67,13 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
     val occurredGameEvents by viewModel.occurredGameEvents.observeAsState(emptyList())
 
-    // Reverse to make the latest events appear first, and then split the list.
-    val latestFiveEvents = occurredGameEvents.takeLast(5).reversed()
-    val olderEvents = occurredGameEvents.dropLast(5).reversed()
+    // Reverse the list to have the most recent events first
+    val reversedEvents = occurredGameEvents.reversed()
+
+    // Split the events based on your criteria
+    val mostRecentEvents = reversedEvents.take(4) // Most recent 4 events
+    val lessProminentEvents = reversedEvents.drop(4).take(3) // Next 3 events
+    val standardListEvents = reversedEvents.drop(7) // Rest of the events
 
     Box(modifier = Modifier.padding(paddingValues)) {
         Column {
@@ -117,13 +123,39 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
 
             LazyColumn {
                 // Section for the latest five events, displayed prominently
-                items(latestFiveEvents) { event ->
+                items(mostRecentEvents) { event ->
                     EventCard(event = event, isProminent = true)
                 }
                 // Section for older events, standard display
-                items(olderEvents) { event ->
+                items(lessProminentEvents) { event ->
                     EventCard(event = event, isProminent = false)
                 }
+                // Section for even older events, display as list with divider without card or icons text on the left side and time on the right side
+                items(standardListEvents) { event ->
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = event.message, // Adjust as per your data structure
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = event.timestamp, // Adjust as per your data structure
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            )
+                        }
+                        Divider()
+                    }
+                }
+
+
             }
         }
     }
@@ -137,42 +169,47 @@ fun EventCard(event: MainViewModel.FrontendGameEvent, isProminent: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
+            .background(color = Color.White), // Set the card background to white
+        elevation = CardDefaults.cardElevation(if (isProminent) 4.dp else 2.dp)
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = event.message,
+                style = if (isProminent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .align(Alignment.Start)
+            )
+
+            // Icons row, centered and with bigger icons for prominent events
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
             ) {
-                Column {
-                    Text(
-                        text = event.message,
-                        style = if (isProminent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    // Assuming event.iconIds is a list of drawable resource IDs
-                    Row {
-                        event.iconIds.take(6).forEach { iconName ->
-                            val resourceId = context.resources.getIdentifier(
-                                iconName,
-                                "drawable",
-                                context.packageName
-                            )
-                            if (resourceId != 0) { // If the resource was found
-                                Icon(
-                                    painter = painterResource(id = resourceId),
-                                    contentDescription = "Event Icon",
-                                    modifier = Modifier.size(if (isProminent) 36.dp else 24.dp)
-                                )
-                            }
-                        }
+                event.iconIds.take(6).forEach { iconName ->
+                    val resourceId = context.resources.getIdentifier(iconName, "drawable", context.packageName)
+                    if (resourceId != 0) { // If the resource was found
+                        Icon(
+                            painter = painterResource(id = resourceId),
+                            contentDescription = "Event Icon",
+                            modifier = Modifier.size(if (isProminent) 60.dp else 36.dp), // Larger icons for prominent events
+                            tint = Color.Unspecified
+                        )
                     }
                 }
-                Text(
-                    text = event.timestamp,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.align(Alignment.CenterVertically)
-                )
             }
+
+            // In-game time on the right side
+            Text(
+                text = event.timestamp,
+                style = if (isProminent) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.End)
+            )
         }
     }
 }

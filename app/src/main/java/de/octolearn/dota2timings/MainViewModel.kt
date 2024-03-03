@@ -32,10 +32,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var gameState = MutableLiveData(GameState.NOT_STARTED)
     val occurredGameEvents = MutableLiveData<List<FrontendGameEvent>>()
 
-    // LiveData to track if the "Roshan Killed" action is enabled
+    // LiveData to track if the "Roshan Killed" and "Tormentor" action is enabled
     val isRoshanActionEnabled = MutableLiveData<Boolean>(true)
     val isDireTormentorActionEnabled = MutableLiveData<Boolean>(false)
     val isRadiantTormentorActionEnabled = MutableLiveData<Boolean>(false)
+
+    // LiveData to track how many roshan kills have occurred
+    val roshanKills = MutableLiveData(0)
 
     // A data class to hold timer job and elapsed time information
     data class TimerInfo(val job: Job, val startTime: Long, val inGameTime: Int)
@@ -86,7 +89,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Start the game timer logic
             startGameTimer()
-            onEventTriggered(EventType.GAME_STARTED, gameTimeInSeconds, List(2) { "dire"; "radiant" })
+            onEventTriggered(EventType.GAME_STARTED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
             gameState.value = GameState.RUNNING
             Log.i("MainViewModel", "Game started")
 
@@ -94,7 +97,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Pause the game
             gameState.value = GameState.PAUSED
             pauseGame()
-            onEventTriggered(EventType.GAME_PAUSED, gameTimeInSeconds, List(2) { "dire"; "radiant" })
+            onEventTriggered(EventType.GAME_PAUSED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
 
             Log.i("MainViewModel", "Game paused")
 
@@ -103,7 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Resume the game
             gameState.value = GameState.RUNNING
             resumeGameTimer()
-            onEventTriggered(EventType.GAME_RESUMED, gameTimeInSeconds, List(2) { "dire"; "radiant" })
+            onEventTriggered(EventType.GAME_RESUMED, gameTimeInSeconds, listOf( "dire_optimized", "radiant_optimized" ))
             Log.i("MainViewModel", "Game resumed")
 
         }
@@ -150,57 +153,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             onEventTriggered(EventType.BOUNTY_RUNE, gameTimeInSeconds, List(1) { "bounty" })
         }
         // Power Rune: spawns every 2 minutes (120 seconds), starting at 6 minutes (360 seconds)
-        if (gameTimeInSeconds >= 240 && (gameTimeInSeconds - 360) % 120 == 0) {
+        if (gameTimeInSeconds >= 360 && (gameTimeInSeconds - 360) % 120 == 0) {
 
             // add all these runes "haste", "illusion", "invisibility", "regeneration", "amplify_damage", "arcane", "shield"
-            onEventTriggered(EventType.POWER_RUNE, gameTimeInSeconds, List(7) { "haste"; "illusion"; "invisibility"; "regeneration"; "amplify_damage"; "arcane"; "shield"})
+            onEventTriggered(EventType.POWER_RUNE, gameTimeInSeconds, listOf( "haste_optimized", "illusion_optimized", "invisibility_optimized", "regen_optimized", "amplify_damage_optimized", "arcane_optimized", "shield_optimized"))
         }
 
         // Wisdom Rune: spawns every 7 minutes (420 seconds), starting at 7 minutes (420 seconds)
         if (gameTimeInSeconds >= 420 && (gameTimeInSeconds - 420) % 420 == 0) {
-            onEventTriggered(EventType.WISDOM_RUNE, gameTimeInSeconds, List(1) { "wisdom" })
+            onEventTriggered(EventType.WISDOM_RUNE, gameTimeInSeconds, List(1) { "wisdom_optimized" })
         }
 
         // Lotus: spawns every 3 minutes (180 seconds), starting at 3 minutes (180 seconds)
         if (gameTimeInSeconds >= 180 && (gameTimeInSeconds - 180) % 180 == 0) {
-            onEventTriggered(EventType.LOTUS, gameTimeInSeconds, List(1) { "lotus" })
+            onEventTriggered(EventType.LOTUS, gameTimeInSeconds, List(1) { "lotus_optimized" })
         }
 
         // Tormentor: spawns at 20 minutes (1200 seconds)
         if (gameTimeInSeconds == 1200) {
-            onEventTriggered(EventType.TORMENTOR, gameTimeInSeconds, List(2) { "dire_tormentor"; "radiant_tormentor" })
+            onEventTriggered(EventType.TORMENTOR, gameTimeInSeconds, listOf("dire_tormentor_optimized", "radiant_tormentor_optimized" ))
             isDireTormentorActionEnabled.value = true
             isRadiantTormentorActionEnabled.value = true
         }
 
         // Water Rune: spawns at 2 minutes (120 seconds) and 4 minutes (240 seconds)
         if (gameTimeInSeconds == 120 || gameTimeInSeconds == 240) {
-            onEventTriggered(EventType.WATER_RUNE, gameTimeInSeconds, List(1) { "water" })
+            onEventTriggered(EventType.WATER_RUNE, gameTimeInSeconds, List(1) { "water_optimized" })
         }
 
         // Neutral items tier 1: spawn at 7 minutes
         if (gameTimeInSeconds == 420) {
-            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_1, gameTimeInSeconds, /*TODO: add icons*/ List(1) {"logo"})
+            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_1, gameTimeInSeconds, List(1) {"tier_1_optimized"})
         }
 
         // Neutral items tier 2: spawn at 17 minutes
         if (gameTimeInSeconds == 1020) {
-            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_2, gameTimeInSeconds, /*TODO: add icons*/ List(1) {"logo"})
+            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_2, gameTimeInSeconds, List(1) {"tier_2_optimized"})
         }
 
         // Neutral items tier 3: spawn at 27 minutes
         if (gameTimeInSeconds == 1620) {
-            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_3, gameTimeInSeconds, /*TODO: add icons*/ List(1) {"logo"})
+            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_3, gameTimeInSeconds, List(1) {"tier_3_optimized"})
         }
 
         // Neutral items tier 4: spawn at 37 minutes
         if (gameTimeInSeconds == 2220) {
-            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_4, gameTimeInSeconds, /*TODO: add icons*/ List(1) {"logo"})
+            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_4, gameTimeInSeconds, List(1) {"tier_4_optimized"})
         }
 
         // Neutral items tier 5: spawn at 60 minutes
         if (gameTimeInSeconds == 3600) {
-            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_5, gameTimeInSeconds, /*TODO: add icons*/ List(1) {"logo"})
+            onEventTriggered(EventType.NEUTRAL_ITEM_TIER_5, gameTimeInSeconds, List(1) {"tier_5_optimized"})
         }
 
 
@@ -371,8 +374,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onRoshanKilled() {
         Log.i("MainViewModel", "Roshan killed")
         isRoshanActionEnabled.value = false
+        roshanKills.value = roshanKills.value?.plus(1)
         val gameTimeInSeconds = gameTimeInSeconds
-        onEventTriggered(EventType.ROSHAN_KILLED, gameTimeInSeconds, List(1) { "roshan" })
+        onEventTriggered(EventType.ROSHAN_KILLED, gameTimeInSeconds, List(1) { "roshan_optimized" })
         // Start timer for events ROSHAN_RESPAWN_MIN and ROSHAN_RESPAWN_MAX
         val respawnTime = 480 // 8 minutes in seconds
         val minRespawnTime = gameTimeInSeconds + respawnTime
@@ -381,13 +385,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val minRespawnJob = viewModelScope.launch {
             // TODO: change to 1000L
             delay(respawnTime * 100L)
-            onEventTriggered(EventType.ROSHAN_RESPAWN_MIN, minRespawnTime, List(1) { "roshan" })
+            onEventTriggered(EventType.ROSHAN_RESPAWN_MIN, minRespawnTime, List(1) { "roshan_optimized" })
             isRoshanActionEnabled.value = true
         }
         val maxRespawnJob = viewModelScope.launch {
             // TODO: change to 1000L
             delay((respawnTime + 180) * 100L)
-            onEventTriggered(EventType.ROSHAN_RESPAWN_MAX, maxRespawnTime, List(1) { "roshan" })
+            onEventTriggered(EventType.ROSHAN_RESPAWN_MAX, maxRespawnTime, List(1) { "roshan_optimized" })
         }
 
         eventTimers[EventType.ROSHAN_RESPAWN_MIN.ordinal] = TimerInfo(minRespawnJob, System.currentTimeMillis(), respawnTime)
@@ -400,11 +404,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.i("MainViewModel", "Dire Tormentor killed")
         isDireTormentorActionEnabled.value = false
         val gameTimeInSeconds = gameTimeInSeconds
-        onEventTriggered(EventType.DIRE_TORMENTOR_KILLED, gameTimeInSeconds, List(1) {"dire_tormentor"})
+        onEventTriggered(EventType.DIRE_TORMENTOR_KILLED, gameTimeInSeconds, List(1) {"dire_tormentor_optimized"})
         val direTormentorRespawnTime = 600 // 10 minutes in seconds
         val direTormentorRespawnJob = viewModelScope.launch {
             delay(direTormentorRespawnTime * 100L)
-            onEventTriggered(EventType.DIRE_TORMENTOR_RESPAWN, gameTimeInSeconds + direTormentorRespawnTime, List(1) {"dire_tormentor"})
+            onEventTriggered(EventType.DIRE_TORMENTOR_RESPAWN, gameTimeInSeconds + direTormentorRespawnTime, List(1) {"dire_tormentor_optimized"})
             isDireTormentorActionEnabled.value = true
         }
 
@@ -415,11 +419,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.i("MainViewModel", "Radiant Tormentor killed")
         isRadiantTormentorActionEnabled.value = false
         val gameTimeInSeconds = gameTimeInSeconds
-        onEventTriggered(EventType.RADIANT_TORMENTOR_KILLED, gameTimeInSeconds, List(1) { "radiant_tormentor" })
+        onEventTriggered(EventType.RADIANT_TORMENTOR_KILLED, gameTimeInSeconds, List(1) { "radiant_tormentor_optimized" })
         val radiantTormentorRespawnTime = 600 // 10 minutes in seconds
         val radiantTormentorRespawnJob = viewModelScope.launch {
             delay(radiantTormentorRespawnTime * 100L)
-            onEventTriggered(EventType.RADIANT_TORMENTOR_RESPAWN, gameTimeInSeconds + radiantTormentorRespawnTime, List(1) { "radiant_tormentor" })
+            onEventTriggered(EventType.RADIANT_TORMENTOR_RESPAWN, gameTimeInSeconds + radiantTormentorRespawnTime, List(1) { "radiant_tormentor_optimized" })
             isRadiantTormentorActionEnabled.value = true
         }
 
@@ -430,28 +434,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun onEventTriggered(eventType: EventType, gameTimeInSeconds: Int, icons: List<String>) {
         Log.i("MainViewModel", "Event triggered: $eventType")
         val eventMessage = when (eventType) {
-            EventType.BOUNTY_RUNE -> "A bounty rune has just spawned."
-            EventType.POWER_RUNE -> "A power rune is available."
-            EventType.WISDOM_RUNE -> "A wisdom rune is available."
-            EventType.ROSHAN_RESPAWN_MIN -> "Roshan may respawn soon."
-            EventType.ROSHAN_RESPAWN_MAX -> "Roshan must be alive now."
-            EventType.TORMENTOR -> "A tormentor has just spawned."
-            EventType.LOTUS -> "A lotus has just spawned."
-            EventType.WATER_RUNE -> "A water rune is available."
-            EventType.ROSHAN_KILLED -> "Roshan has been killed. Respawns in 8-11."
-            EventType.DIRE_TORMENTOR_KILLED -> "Dire tormentor has been killed. Respawn in 10."
-            EventType.RADIANT_TORMENTOR_KILLED -> "Radiant tormentor has been killed. Respawn in 10."
-            EventType.NEUTRAL_ITEM_TIER_1 -> "Tier 1 neutral item available."
-            EventType.NEUTRAL_ITEM_TIER_2 -> "Tier 2 neutral item available."
-            EventType.NEUTRAL_ITEM_TIER_3 -> "Tier 3 neutral item available."
-            EventType.NEUTRAL_ITEM_TIER_4 -> "Tier 4 neutral item available."
-            EventType.NEUTRAL_ITEM_TIER_5 -> "Tier 5 neutral item available."
-            EventType.GAME_STARTED -> "Game has started."
+            EventType.BOUNTY_RUNE -> "Bounty rune"
+            EventType.POWER_RUNE -> "Power rune"
+            EventType.WISDOM_RUNE -> "Wisdom rune"
+            EventType.ROSHAN_RESPAWN_MIN -> "Roshan #${roshanKills.value?.plus(1)} may respawn"
+            EventType.ROSHAN_RESPAWN_MAX -> "Roshan #${roshanKills.value?.plus(1)} alive now"
+            EventType.TORMENTOR -> "Tormentor available"
+            EventType.LOTUS -> "Healing lotus"
+            EventType.WATER_RUNE -> "Water rune"
+            EventType.ROSHAN_KILLED -> "Roshan killed #${roshanKills.value}"
+            EventType.DIRE_TORMENTOR_KILLED -> "Dire tormentor killed"
+            EventType.RADIANT_TORMENTOR_KILLED -> "Radiant tormentor killed"
+            EventType.NEUTRAL_ITEM_TIER_1 -> "Tier 1 neutral items"
+            EventType.NEUTRAL_ITEM_TIER_2 -> "Tier 2 neutral items"
+            EventType.NEUTRAL_ITEM_TIER_3 -> "Tier 3 neutral items"
+            EventType.NEUTRAL_ITEM_TIER_4 -> "Tier 4 neutral items"
+            EventType.NEUTRAL_ITEM_TIER_5 -> "Tier 5 neutral items"
+            EventType.GAME_STARTED -> "Game has been started."
             EventType.GAME_PAUSED -> "Game has been paused."
             EventType.GAME_RESUMED -> "Game has been resumed."
             EventType.GAME_ENDED ->  "Game has ended."
-            EventType.DIRE_TORMENTOR_RESPAWN -> "Dire tormentor has respawned."
-            EventType.RADIANT_TORMENTOR_RESPAWN -> "Radiant tormentor has respawned."
+            EventType.DIRE_TORMENTOR_RESPAWN -> "Dire tormentor respawn"
+            EventType.RADIANT_TORMENTOR_RESPAWN -> "Radiant tormentor respawn"
+
         }
         sendNotification(eventType, eventMessage)
         addGameEvent(eventMessage, gameTimeInSeconds, icons)
