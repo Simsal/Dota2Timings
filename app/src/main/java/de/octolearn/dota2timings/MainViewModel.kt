@@ -418,9 +418,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             roshanState.value = RoshanState.AEGIS_DISAPPEARED
         }
 
-        eventTimers[EventType.ROSHAN_RESPAWN_MIN.ordinal] = TimerInfo(minRespawnJob, System.currentTimeMillis(), respawnTime)
-        eventTimers[EventType.ROSHAN_RESPAWN_MAX.ordinal] = TimerInfo(maxRespawnJob, System.currentTimeMillis(), respawnTime + 180)
-        eventTimers[EventType.AEGIS_DISAPPEARS.ordinal] = TimerInfo(aegisDespawnJob, System.currentTimeMillis(), 300)
+        eventTimers[EventType.ROSHAN_RESPAWN_MIN.ordinal] = TimerInfo(minRespawnJob!!, System.currentTimeMillis(), respawnTime)
+        eventTimers[EventType.ROSHAN_RESPAWN_MAX.ordinal] = TimerInfo(maxRespawnJob!!, System.currentTimeMillis(), respawnTime + 180)
+        eventTimers[EventType.AEGIS_DISAPPEARS.ordinal] = TimerInfo(aegisDespawnJob!!, System.currentTimeMillis(), 300)
 
     }
 

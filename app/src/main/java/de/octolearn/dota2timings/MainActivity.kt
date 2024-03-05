@@ -222,7 +222,6 @@ fun EventCard(event: MainViewModel.FrontendGameEvent, isProminent: Boolean) {
 fun AppTopBar(viewModel: MainViewModel) {
     val roshanKills by viewModel.roshanKills.observeAsState(0)
     val isNight by viewModel.isNight.observeAsState(true)
-    val isRoshanActionEnabled by viewModel.isRoshanActionEnabled.observeAsState(false)
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
     val gameTime by viewModel.gameTime.observeAsState("-01:30")
     val pauseTime by viewModel.pauseTime.observeAsState("00:00")
