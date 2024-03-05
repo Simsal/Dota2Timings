@@ -31,13 +31,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import de.octolearn.dota2timings.ui.theme.md_theme_light_primary
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -224,9 +222,12 @@ fun EventCard(event: MainViewModel.FrontendGameEvent, isProminent: Boolean) {
 fun AppTopBar(viewModel: MainViewModel) {
     val roshanKills by viewModel.roshanKills.observeAsState(0)
     val isNight by viewModel.isNight.observeAsState(true)
+    val isRoshanActionEnabled by viewModel.isRoshanActionEnabled.observeAsState(false)
     val gameState by viewModel.gameState.observeAsState(MainViewModel.GameState.NOT_STARTED)
     val gameTime by viewModel.gameTime.observeAsState("-01:30")
     val pauseTime by viewModel.pauseTime.observeAsState("00:00")
+    val roshanState by viewModel.roshanState.observeAsState(MainViewModel.RoshanState.ALIVE)
+
 
     TopAppBar(
         title = {
@@ -236,14 +237,59 @@ fun AppTopBar(viewModel: MainViewModel) {
             ) {
                 // Roshan kills on the left
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.Start) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.roshan_optimized), // Replace with actual Roshan icon resource ID
-                        contentDescription = "Roshan Kills",
-                        modifier = Modifier.size(30.dp),
-                        tint = Color.Unspecified
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "#${roshanKills +1}")
+                    when (roshanState) {
+                        MainViewModel.RoshanState.ALIVE -> {
+                            Icon(
+                                painter = painterResource(id = R.drawable.roshan_optimized),
+                                contentDescription = "Roshan Alive",
+                                modifier = Modifier.size(30.dp),
+                                tint = Color.Unspecified
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "#${roshanKills + 1}",
+                                color = Color.Black
+                            )
+                        }
+                        MainViewModel.RoshanState.KILLED -> {
+                            Icon(
+                                painter = painterResource(id = R.drawable.aegis_optimized),
+                                contentDescription = "Aegis",
+                                modifier = Modifier.size(30.dp),
+                                tint = Color.Unspecified
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "#$roshanKills",
+                                color = Color.Black
+                            )
+                        }
+                        MainViewModel.RoshanState.AEGIS_DISAPPEARED -> {
+                            Icon(
+                                painter = painterResource(id = R.drawable.roshan_clock_optimized),
+                                contentDescription = "Roshan Clock",
+                                modifier = Modifier.size(42.dp),
+                                tint = Color.Unspecified
+                            )
+
+                        }
+
+                        MainViewModel.RoshanState.COULD_RESPAWN -> {
+                            Icon(
+                                painter = painterResource(id = R.drawable.roshan_clock_optimized),
+                                contentDescription = "Roshan Clock",
+                                modifier = Modifier.size(42.dp),
+                                tint = Color.Unspecified
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                painter = painterResource(id = R.drawable.roshan_optimized),
+                                contentDescription = "Roshan Could Be Up",
+                                modifier = Modifier.size(30.dp),
+                                tint = Color.Unspecified
+                            )
+                        }
+                    }
                 }
 
                 // Centered game time or pause time
@@ -305,8 +351,10 @@ fun MainScreenFAB(viewModel: MainViewModel) {
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Outlined.Delete, // Just an example, choose an appropriate icon
-                        contentDescription = "Roshan Killed"
+                        painter = painterResource(id = R.drawable.roshan_optimized),
+                        contentDescription = "Roshan",
+                        modifier = Modifier.size(30.dp),
+                        tint = Color.Unspecified
                     )
                 },
                 enabled = isRoshanActionEnabled
@@ -319,8 +367,10 @@ fun MainScreenFAB(viewModel: MainViewModel) {
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Outlined.Delete, // Just an example, choose an appropriate icon
-                        contentDescription = "Dire Tormentor killed"
+                        painter = painterResource(id = R.drawable.dire_tormentor_optimized),
+                        contentDescription = "Dire Tormentor",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.Unspecified
                     )
                 },
                 enabled = isDireTormentorActionEnabled
@@ -333,8 +383,10 @@ fun MainScreenFAB(viewModel: MainViewModel) {
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Outlined.Delete, // Just an example, choose an appropriate icon
-                        contentDescription = "Radiant Tormentor killed"
+                        painter = painterResource(id = R.drawable.radiant_tormentor_optimized),
+                        contentDescription = "Radiant Tormentor",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.Unspecified
                     )
                 },
                 enabled = isRadiantTormentorActionEnabled

@@ -40,6 +40,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // LiveData to track how many roshan kills have occurred
     val roshanKills = MutableLiveData(0)
 
+    // LiveData if aegis is active
+    enum class RoshanState {
+        ALIVE, KILLED, AEGIS_DISAPPEARED, COULD_RESPAWN
+    }
+    val roshanState = MutableLiveData<RoshanState>(RoshanState.ALIVE)
+
+
     // LiveData if it is night
     val isNight = MutableLiveData(true)
 
@@ -60,6 +67,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var gameTimerJob: Job? = null
     private var pauseTimerJob: Job? = null
 
+    private var minRespawnJob: Job? = null
+    private var maxRespawnJob: Job? = null
+    private var aegisDespawnJob: Job? = null
+
     private var pauseStartTime: Long = 0L
     var gameTime = MutableLiveData("-01:30")
     var pauseTime = MutableLiveData("00:00")
@@ -68,9 +79,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var pausedAtSecond: Int? = null
 
     //dev
-    //private var delay = 100L
+    private var delay = 100L
     //prod
-    private var delay = 1000L
+    //private var delay = 1000L
 
     enum class GameState {
         NOT_STARTED, RUNNING, PAUSED, ENDED
@@ -124,6 +135,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         gameTimerJob?.cancel() // Stop the game timer
         pauseTimerJob?.cancel() // Stop the pause timer if running
         gameState.value = GameState.ENDED
+
+        // clear roshan state
+        roshanState.value = RoshanState.ALIVE
+        // clear roshan kills
+        roshanKills.value = 0
 
         // Insert game end event into the database
         viewModelScope.launch {
@@ -373,25 +389,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.i("MainViewModel", "Roshan killed")
         isRoshanActionEnabled.value = false
         roshanKills.value = roshanKills.value?.plus(1)
+        roshanState.value = RoshanState.KILLED
         val gameTimeInSeconds = gameTimeInSeconds
         onEventTriggered(EventType.ROSHAN_KILLED, gameTimeInSeconds, List(1) { "roshan_optimized" })
+
+        // Cancel the existing max respawn timer if it is running
+        eventTimers[EventType.ROSHAN_RESPAWN_MAX.ordinal]?.job?.cancel()
+
         // Start timer for events ROSHAN_RESPAWN_MIN and ROSHAN_RESPAWN_MAX
         val respawnTime = 480 // 8 minutes in seconds
         val minRespawnTime = gameTimeInSeconds + respawnTime
         val maxRespawnTime = gameTimeInSeconds + respawnTime + 180 // 3 minutes in seconds
 
-        val minRespawnJob = viewModelScope.launch {
+        minRespawnJob = viewModelScope.launch {
             delay(respawnTime * delay)
             onEventTriggered(EventType.ROSHAN_RESPAWN_MIN, minRespawnTime, List(1) { "roshan_optimized" })
             isRoshanActionEnabled.value = true
+            roshanState.value = RoshanState.COULD_RESPAWN
         }
-        val maxRespawnJob = viewModelScope.launch {
+        maxRespawnJob = viewModelScope.launch {
             delay((respawnTime + 180) * delay)
             onEventTriggered(EventType.ROSHAN_RESPAWN_MAX, maxRespawnTime, List(1) { "roshan_optimized" })
+            roshanState.value = RoshanState.ALIVE
         }
-        val aegisDespawnJob = viewModelScope.launch {
+        aegisDespawnJob = viewModelScope.launch {
             delay(300 * delay)
             onEventTriggered(EventType.AEGIS_DISAPPEARS, gameTimeInSeconds + 300, List(1) { "aegis_optimized" })
+            roshanState.value = RoshanState.AEGIS_DISAPPEARED
         }
 
         eventTimers[EventType.ROSHAN_RESPAWN_MIN.ordinal] = TimerInfo(minRespawnJob, System.currentTimeMillis(), respawnTime)
