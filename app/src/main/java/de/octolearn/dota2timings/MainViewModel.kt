@@ -7,13 +7,24 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.NoLiveLiterals
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.asLiveData
+import androidx.lifecycle.liveData
+import androidx.lifecycle.map
+import androidx.lifecycle.switchMap
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.max
 @NoLiveLiterals
@@ -23,6 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val eventDao = database.eventDao()
     private val gameEventDao = database.gameEventDao()
     private val gameDao = database.gameDao()
+    private val dotaAbilityDao = database.dotaAbilityDao()
 
     // current game id
     var currentGameId: Int = 0
@@ -46,12 +58,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     val roshanState = MutableLiveData<RoshanState>(RoshanState.ALIVE)
 
-
     // LiveData if it is night
     val isNight = MutableLiveData(true)
 
+    // LiveData for all heroes
+    private val _heroesWithAbilities = MutableLiveData<List<HeroWithAbilities>>()
+    val heroesWithAbilities: LiveData<List<HeroWithAbilities>> = _heroesWithAbilities
+
+
+
+    // Temporary state for selected heroes
+    val selectedHeroes = mutableStateOf(listOf<String>())
+
+    // Dialog for game set up
+    val showDialog = MutableLiveData<Boolean>(false)
+
+    private val _uiState = MutableLiveData<UiState>(UiState.Loading)
+    val uiState: LiveData<UiState> = _uiState
+
+    // Define UI states
+    sealed class UiState {
+        object Loading : UiState()
+        object Success : UiState()
+        data class Error(val message: String) : UiState()
+    }
+
+
     // A data class to hold timer job and elapsed time information
     data class TimerInfo(val job: Job, val startTime: Long, val inGameTime: Int)
+
+    data class HeroWithAbilities(
+        val id: String,
+        val name: String,
+        val abilities: List<Ability>
+    )
+
+    data class Ability(
+        val name: String,
+        val imageUrl: String
+    )
 
     // A data class to store text + timestamp
     data class FrontendGameEvent(
@@ -87,11 +132,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NOT_STARTED, RUNNING, PAUSED, ENDED
     }
 
+    init {
+        loadHeroesWithAbilities()
+    }
     @NoLiveLiterals
     fun startGame() {
         gameTimerJob?.cancel() // Cancel any existing job
-
-
 
         if (gameState.value == GameState.NOT_STARTED) {
             // Insert game in the database
@@ -452,6 +498,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         eventTimers[EventType.RADIANT_TORMENTOR_KILLED.ordinal] = TimerInfo(radiantTormentorRespawnJob, System.currentTimeMillis(), radiantTormentorRespawnTime)
+    }
+
+    fun showSetupGameDialog() {
+        showDialog.value = true
+    }
+
+    fun hideSetupGameDialog() {
+        showDialog.value = false
+    }
+
+    private fun loadHeroesWithAbilities() {
+        viewModelScope.launch {
+            try {
+
+                val heroNames = withContext(Dispatchers.IO) { dotaAbilityDao.getAllHeroNames().value ?: emptyList() }
+                val heroesWithAbilitiesResult = mutableListOf<HeroWithAbilities>()
+                heroNames.forEach { heroName ->
+                    val abilities = withContext(Dispatchers.IO) { dotaAbilityDao.getAbilitiesForHero(heroName).value ?: emptyList() }
+                    heroesWithAbilitiesResult.add(HeroWithAbilities(heroName, heroName, abilities.map { Ability(it.name, it.img) }))
+                }
+                _heroesWithAbilities.postValue(heroesWithAbilitiesResult)
+                _uiState.value = UiState.Success
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to load data")
+            }
+        }
+    }
+
+    fun toggleHeroSelection(heroId: String, isSelected: Boolean) {
+        // Current list of selected hero IDs
+        val currentSelectedHeroes = selectedHeroes.value ?: emptyList()
+
+        val updatedSelectedHeroes = if (isSelected) {
+            // Add the hero ID to the list if it's selected and not already in the list
+            currentSelectedHeroes.plus(heroId)
+        } else {
+            // Remove the hero ID from the list if it's deselected
+            currentSelectedHeroes.filterNot { it == heroId }
+        }
+
+        // Update the LiveData with the new list of selected hero IDs
+        selectedHeroes.value = updatedSelectedHeroes
     }
 
 

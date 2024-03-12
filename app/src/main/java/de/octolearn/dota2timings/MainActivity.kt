@@ -3,7 +3,9 @@ package de.octolearn.dota2timings
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -28,14 +32,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import coil.compose.rememberImagePainter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,17 +114,27 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
                     }
                 }
             } else {
-                // If the game is not started or in any other state, show the start game button
-                Button(
-                    onClick = viewModel::startGame,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RectangleShape // Apply RectangleShape to remove rounded corners
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    // If the game is not started or in any other state, show the start game button
+                    Button(
+                        onClick = viewModel::startGame,
+                        modifier = Modifier.weight(1f),
+                        shape = RectangleShape // Apply RectangleShape to remove rounded corners
 
-                ) {
-                    Text(
-                        text = "▶ Start Game",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    ) {
+                        Text(
+                            text = "▶ Quickstart Game",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Button(
+                        onClick = viewModel::showSetupGameDialog,
+                        modifier = Modifier.weight(1f),
+
+                        shape = RectangleShape) {
+                        Text("Set Up Game")
+                    }
                 }
             }
 
@@ -156,6 +175,137 @@ fun MainScreenContent(viewModel: MainViewModel, paddingValues: PaddingValues) {
 
             }
         }
+        // Check and display dialogs at the end for better organization
+        GameSetupDialogIfNeeded(viewModel = viewModel)
+    }
+}
+
+@Composable
+fun GameSetupDialogIfNeeded(viewModel: MainViewModel) {
+    val showDialog by viewModel.showDialog.observeAsState(false)
+
+    if (showDialog) {
+        GameSetupDialog(viewModel = viewModel) {
+            viewModel.hideSetupGameDialog()
+        }
+    }
+}
+
+@Composable
+fun GameSetupDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val heroesWithAbilities by viewModel.heroesWithAbilities.observeAsState(initial = emptyList())
+    val expandedHeroId = remember { mutableStateOf<String?>(null) }
+    val uiState by viewModel.uiState.observeAsState()
+
+    when (uiState) {
+        is MainViewModel.UiState.Loading -> CircularProgressIndicator()
+        is MainViewModel.UiState.Error -> Text("Error: ${(uiState as MainViewModel.UiState.Error).message}")
+        is MainViewModel.UiState.Success -> {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                title = { Text("Game Setup") },
+                text = {
+                    LazyColumn {
+                        items(heroesWithAbilities) { hero ->
+                            HeroSelectionItem(
+                                hero = hero,
+                                isExpanded = expandedHeroId.value == hero.id,
+                                onHeroSelected = { isSelected ->
+                                    viewModel.toggleHeroSelection(hero.id, isSelected)
+                                },
+                                onExpandClicked = {
+                                    expandedHeroId.value = if (expandedHeroId.value == hero.id) null else hero.id
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        //viewModel.finalizeGameSetup()
+                        onDismiss()
+                    }) {
+                        Text("Start Game")
+                    }
+                }
+            )
+        }
+
+        null -> {
+            // No-op
+        }
+    }
+
+
+}
+
+@Composable
+fun HeroSelectionItem(
+    hero: MainViewModel.HeroWithAbilities, // Assume this includes id, name, and abilities (each with name and imageURL)
+    isExpanded: Boolean,
+    onHeroSelected: (Boolean) -> Unit,
+    onExpandClicked: () -> Unit
+) {
+    var isSelected by remember { mutableStateOf(false) }
+    Card(modifier = Modifier
+        .fillMaxWidth()
+        .padding(4.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { onExpandClicked() }
+                    .fillMaxWidth()) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = {
+                        isSelected = it
+                        onHeroSelected(it)
+                    }
+                )
+                Text(text = hero.name, style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f))
+                IconButton(onClick = { onExpandClicked() }) {
+                    Icon(imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand")
+                }
+            }
+            if (isExpanded) {
+                AbilitiesList(abilities = hero.abilities)
+            }
+        }
+    }
+}
+
+@Composable
+fun AbilitiesList(abilities: List<MainViewModel.Ability>) {
+    LazyColumn {
+        items(abilities) { ability ->
+            AbilityItem(ability = ability)
+        }
+    }
+}
+
+@Composable
+fun AbilityItem(ability: MainViewModel.Ability) {
+    // Improved Image loading with placeholders and error handling
+    val painter = rememberImagePainter(
+        data = ability.imageUrl,
+        builder = {
+            crossfade(true)
+            placeholder(R.drawable.dire_optimized)
+            error(R.drawable.radiant_optimized)
+        }
+    )
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
+        Image(
+            painter = painter,
+            contentDescription = ability.name, // Accessibility improvement
+            modifier = Modifier.size(40.dp),
+            contentScale = ContentScale.Fit
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = ability.name, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

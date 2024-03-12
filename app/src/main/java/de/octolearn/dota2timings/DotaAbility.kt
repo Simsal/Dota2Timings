@@ -1,5 +1,6 @@
 package de.octolearn.dota2timings
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 @Entity(tableName = "dota_abilities")
@@ -8,5 +9,5 @@ data class DotaAbility(
     val name: String,
     val img: String,
     val cd: String,
-    val heroName: String
+    @ColumnInfo(name = "hero_name") val heroName: String
 )
